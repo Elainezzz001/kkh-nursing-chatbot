@@ -16,19 +16,18 @@ def chunk_text(text, chunk_size=500):
     words = text.split()
     return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
 
-def get_embedding(text, hf_api_key):
-    api_url = "https://api-inference.huggingface.co/pipeline/feature-extraction/BAAI/bge-small-en-v1.5"
-    headers = {"Authorization": f"Bearer {hf_api_key}"}
-    response = requests.post(api_url, headers=headers, json={"inputs": text})
+def get_embedding(text):
+    api_url = "http://192.168.75.1:1234/v1/embeddings"  # LM Studio local endpoint
+    headers = {"Content-Type": "application/json"}
+    data = {"model": "paraphrase-MiniLM-L3-v2", "input": text}
+    response = requests.post(api_url, headers=headers, json=data)
     response.raise_for_status()
-    return np.array(response.json()[0])
+    return np.array(response.json()["data"][0]["embedding"])
 
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 st.title("Nursing Chatbot (LM Studio)")
-
-hf_api_key = st.secrets["HF_API_KEY"]
 
 pdf_path = os.path.join("data", "KKH Information file.pdf")
 pdf_text = extract_pdf_text(pdf_path)
@@ -37,13 +36,13 @@ chunks = chunk_text(pdf_text)
 # Precompute embeddings for all chunks (in a real app, cache this!)
 chunk_embeddings = []
 for chunk in chunks:
-    chunk_embeddings.append(get_embedding(chunk, hf_api_key))
+    chunk_embeddings.append(get_embedding(chunk))
 
 user_input = st.text_input("Ask a question:")
 
 if st.button("Send") and user_input:
     # Get embedding for user query
-    query_emb = get_embedding(user_input, hf_api_key)
+    query_emb = get_embedding(user_input)
     # Find most similar chunk
     sims = [cosine_similarity(query_emb, emb) for emb in chunk_embeddings]
     best_idx = int(np.argmax(sims))
